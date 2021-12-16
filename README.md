@@ -1,2 +1,4 @@
-# mentoring
-A repository for receiving practical work from developers.
+# Правила
+
+- Для того чтобы показать работу необходимо создать папку со своим именем( лучше имя пользователя из ТГ ).
+- Поместить работу в папку и сделать PR в ветку practice.
