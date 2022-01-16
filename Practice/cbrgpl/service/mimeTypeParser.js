@@ -1,13 +1,13 @@
-const MimeTypeError = require( '../error/mimeTypeError' );
+const { MimeTypeError } = require( '../error/mimeTypeError' );
 
 const { isFunction } = require( '../helper/isFunction' );
 const { NO_CONTENT_TYPE } = require( '../helper/consts' );
-const { lookbehindAnalog } = require( '../helper/lookbehindAnalog' );
+const { lookbehind } = require( '../helper/lookbehind' );
 
 const noContentTypeHandler = () => null;
 
-module.exports = class MimeTypeParser {
-  constructor( mimeParserPairs ) {
+module.exports.MimeTypeParser = class  {
+  constructor( mimeParserPairs = {} ) {
     this.validateMimeParsers( mimeParserPairs );
 
     this.mimeParserPairs = mimeParserPairs;
@@ -37,7 +37,7 @@ module.exports = class MimeTypeParser {
 
     if( headers ) {
       const contentType = headers.get( 'Content-Type' );
-      return contentType !== null ? lookbehindAnalog( contentType, '^', /;.*/ ) : NO_CONTENT_TYPE;
+      return contentType !== null ? lookbehind( contentType, '^', /;.*/ ) : NO_CONTENT_TYPE;
     } else {
       throw TypeError( 'httpResponse argument does not have headers property\nDo you sure you passed instance of Response?' );
     };
