@@ -58,11 +58,16 @@ const API = {
 
 async function test() {
   const { Service } = require( './../service/service' );
+  const { ResponseProcessor } = require( './../service/responseProcessor' );
+
+  const mimeParserPairs = {
+    'application/json': ( data ) => console.log( 'app/json', data )
+  };
+  const responseProcessor = new ResponseProcessor( mimeParserPairs );
+
   const service = new Service( {
     moduleScheme: API.auth,
-    mimeParserPairs: {
-      'application/json': ( data ) => console.log( 'application/json', data )
-    },
+    responseProcessor,
     name: 'auth',
   } );
 
@@ -91,10 +96,8 @@ async function test() {
   } );
 
   const request = await service.login( {
-    data: {
-      username: 'cybirgpl',
-      password: 'jeppka22'
-    },
+    username: 'cybirgpl',
+    password: 'jeppka22'
   } );
 }
 

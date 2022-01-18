@@ -8,11 +8,11 @@ const { defaultHook } = require( '../helper/defaultHook' );
 const { isFunction } = require( './../helper/isFunction' );
 
 module.exports.Service = class {
-  constructor( { moduleScheme, mimeParserPairs, invalidStatuses, responseProcessor = null, name = null } ) {
+  constructor( { moduleScheme, responseProcessor = null, name = null } ) {
     this.name = name;
 
     this.fetcher = new Fetcher( moduleScheme );
-    this.responseProcessor = responseProcessor === null ? new ResponseProcessor( mimeParserPairs, invalidStatuses ) : responseProcessor;
+    this.responseProcessor = responseProcessor;
 
     this.defaultBeforeRequest = function ( { handlerName, data, id } ) {
       return arguments[ 0 ];
@@ -28,11 +28,14 @@ module.exports.Service = class {
     const hookedArgs = beforeRequestHook( arguments[ 0 ] ) || arguments[ 0 ];
 
     const httpResponse = await this.fetcher.request( hookedArgs );
-    const handledResponse = await this.responseProcessor.processResponse( httpResponse );
 
-    this.hooks.responseHandled( handledResponse );
-
-    return handledResponse;
+    if( this.responseProcessor !== null ) {
+      const handledResponse =  await this.responseProcessor.processResponse( httpResponse );
+      this.hooks.responseHandled( handledResponse );
+      return handledResponse;
+    } else {
+      return httpResponse;
+    }
   }
 
   validateData( data, dataSchema, handlerName ) {
@@ -51,7 +54,7 @@ module.exports.Service = class {
       this.beforeRequestHooks[ handlerName ] = this.defaultBeforeRequest;
       this.validators[ handlerName ] = dataSchema ? ajv.compile( dataSchema ) : ( data ) => true;
 
-      this[ handlerName ] = async ( { data, id } ) => {
+      this[ handlerName ] = async ( data, id ) => {
         this.validateData( data, dataSchema, handlerName );
 
         return this.request( {

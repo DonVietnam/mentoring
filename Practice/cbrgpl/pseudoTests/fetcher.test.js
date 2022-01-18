@@ -52,13 +52,12 @@ async function test() {
   } );
 
   const request = await fetcher.request( {
-    endpointName: 'login',
+    handlerName: 'login',
     data: {
       body: 1,
       hard: true
     },
     id: 'id_2ie',
-    useBody: true
   } );
 }
 

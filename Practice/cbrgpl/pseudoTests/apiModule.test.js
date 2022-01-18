@@ -1,4 +1,4 @@
-const { ApiModule } = require( './service/apiModule.js' );
+const { ApiModule } = require( './../service/apiModule.js' );
 
 const API = {
   auth: [
@@ -45,9 +45,15 @@ const API = {
 };
 
 
-const apiModule = new ApiModule( API.auth );
 
-const requestParams = {};
 
-requestParams[ 'login' ] = apiModule.getRequestParams( 'login', { body: 1 }, undefined, true );
-requestParams[ 'logout' ] = apiModule.getRequestParams( 'logout', { hard: true, time: 5 }, 'id_121' );
+module.exports.test = function() {
+  const apiModule = new ApiModule( API.auth );
+
+  const requestParams = {};
+
+  requestParams[ 'login' ] = apiModule.getRequestParams( 'login', { body: 1 } );
+  requestParams[ 'logout' ] = apiModule.getRequestParams( 'logout', { hard: true, time: 5 }, 'id_121' );
+
+  console.log( 'q' );
+};

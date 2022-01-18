@@ -1,5 +1,5 @@
-const { NO_CONTENT_TYPE } = require( './../helper/consts' );
-
+const { NO_CONTENT_TYPE } = require( './../enum/consts' );
+const { METHOD_TYPES } = require( './../enum/methodTypes' );
 const queryIdTempalate = '{{id}}';
 
 module.exports.ApiEndpoint = class {
@@ -7,9 +7,8 @@ module.exports.ApiEndpoint = class {
     this.endpointMetadata = endpointMetadata;
   }
 
-
-  getRequestParams( data, id ) {
-    const requestParams = {
+  getDefaultRequestParams() {
+    return {
       url: null,
       fetchParams: {
         body: null,
@@ -21,46 +20,53 @@ module.exports.ApiEndpoint = class {
         roles: this.endpointMetadata.roles,
       }
     };
-
-    const path = this.getUrl( id );
-    const { url, body } = this.bindDataToRequest( path, data );
-
-    requestParams.fetchParams.body = body;
-    requestParams.url = url;
-
-    if( body === NO_CONTENT_TYPE ) {
-      delete requestParams.fetchParams.body;
-    }
-
-    return requestParams;
   }
 
-  getUrl( id ) {
-    return this.endpointMetadata.path.replace( queryIdTempalate, id );
+  getRequestParams( data, id ) {
+    const defaultRequestParams = this.getDefaultRequestParams();
+    const methodType = this.defineMethodType( defaultRequestParams.fetchParams.method );
+
+    if( methodType === METHOD_TYPES.USE_BODY.NAME ) {
+      return this.prepareUseBodyRequest( defaultRequestParams, data );
+    } else {
+      return this.prepareUseQueryParamsRequest( defaultRequestParams, data, id );
+    }
   }
 
-  bindDataToRequest( path, data ) {
-    if( this.endpointMetadata.useBody ) {
-      return {
-        url: path,
-        body: data,
-      };
-    }
+  prepareUseBodyRequest( defaultRequestParams, data ) {
+    defaultRequestParams.url = this.endpointMetadata.path;
+    defaultRequestParams.fetchParams.body = data;
 
-    return {
-      url: this.insertQueryParams( path, data ),
-      body: NO_CONTENT_TYPE,
+    return defaultRequestParams;
+  }
+
+  prepareUseQueryParamsRequest( defaultRequestParams, data, id ) {
+    defaultRequestParams.url = this.insertUrlId( id );
+    defaultRequestParams.url = this.insertQueryParams( defaultRequestParams.url, data );
+
+    return defaultRequestParams;
+  }
+
+  defineMethodType( method ) {
+    if( METHOD_TYPES.USE_BODY.METHODS.includes( method ) ) {
+      return METHOD_TYPES.USE_BODY.NAME;
+    } else {
+      return METHOD_TYPES.USE_QUERY_PARAMS.NAME;
     };
   }
 
-  insertQueryParams( path, queryParams ) {
-    let url = path + '?';
+  insertUrlId( id ) {
+    return this.endpointMetadata.path.replace( queryIdTempalate, id );
+  }
+
+  insertQueryParams( url, queryParams ) {
+    let paramsUrl = url + '?';
 
     for( const param in queryParams ) {
-      url += `${ param }=${ queryParams[ param ] }&`;
+      paramsUrl += `${ param }=${ queryParams[ param ] }&`;
     }
 
-    return url.slice( 0, -1 );
+    return paramsUrl.slice( 0, -1 );
   }
 
 };

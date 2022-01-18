@@ -1,7 +1,7 @@
 const { MimeTypeError } = require( '../error/mimeTypeError' );
 
 const { isFunction } = require( '../helper/isFunction' );
-const { NO_CONTENT_TYPE } = require( '../helper/consts' );
+const { NO_CONTENT_TYPE } = require( '../enum/consts' );
 const { lookbehind } = require( '../helper/lookbehind' );
 
 const noContentTypeHandler = () => null;
@@ -23,9 +23,9 @@ module.exports.MimeTypeParser = class  {
   }
 
   getMimeParser( responseMimeType ) {
-    const expectedMimeType = Object.keys( this.mimeParserPairs );
+    const expectedMimeTypes = Object.keys( this.mimeParserPairs );
 
-    if( expectedMimeType.includes( responseMimeType ) ) {
+    if( expectedMimeTypes.includes( responseMimeType ) ) {
       return this.mimeParserPairs[ responseMimeType ];
     } else {
       throw new MimeTypeError( responseMimeType, `A MIME type equal to '${ responseMimeType }' is not expect\nMake sure u defined right MIME type key` );

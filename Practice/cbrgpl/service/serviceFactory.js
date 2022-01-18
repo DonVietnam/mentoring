@@ -1,40 +1,44 @@
-const { Service } = require( './service' );
+const { Service: DefaultService } = require( './service' );
 
-module.exports.ServiceFactory = class  {
-  constructor( { ServiceClass = Service, mimeParserPairs } ) {
-    if( ServiceClass !== Service && !( ServiceClass.prototype instanceof Service ) ) {
-      throw TypeError( 'ServiceClass must extend Service class' );
+module.exports.ServiceFactory = class ServiceFactory {
+  static generateServices( serviceFactory, apiModules ) {
+    if( !( serviceFactory instanceof ServiceFactory ) && serviceFactory.prototype !== ServiceFactory ) {
+      throw TypeError( 'Passed serviceFactory is not extend ServiceFactory Class' );
     }
 
-    this.ServiceClass = ServiceClass;
-    this.mimeParserPairs = mimeParserPairs;
-  }
-
-  generateServices( apiModules ) {
     const services = {};
 
     for( const moduleName in apiModules ) {
-      const service = this.generateService( moduleName, apiModules[ moduleName ], this.mimeParserPairs );
+      const service = serviceFactory.generateService( moduleName, apiModules[ moduleName ] );
       services[ service.name ] = service;
     }
 
     return services;
   }
 
+  constructor( { Service = DefaultService, responseProcessor = null } ) {
+    this.Service = Service;
+    this.responseProcessor = responseProcessor;
+  }
 
-  generateService( moduleName, apiModule, mimeParserPairs ) {
-    const service = new this.ServiceClass( {
-      name: moduleName,
+  getServiceName( moduleName ) {
+    return moduleName.charAt( 0 ).toUpperCase() + moduleName.slice( 1 ) + 'Service';
+  }
+
+  generateService( moduleName, apiModule ) {
+    const serviceName = getServiceName( moduleName );
+    const service = new this.Service( {
+      name: serviceName,
       moduleScheme: apiModule,
-      mimeParserPairs,
+      responseProcessor: this.responseProcessor,
     } );
 
     for( const endpointMetadata of apiModule ) {
       const handlerName = endpointMetadata.handler;
+
       service.addHandler( {
         handlerName,
         dataScheme: endpointMetadata.scheme,
-        useBody: endpointMetadata.useBody,
       } );
     }
 
