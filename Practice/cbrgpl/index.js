@@ -1,15 +1,6 @@
-import { GetUserServiceCommand } from '@services/command'
-
-// Типа сервис
-const userService = {
-    async getUser() {
-     // ...
-    },
-    async getUserTickets() {
-        // ...
-    }
+import getUserServiceCommand from './getUserServiceCommand'
+import SaveUserInStoreCommand from './saveUserInStoreCommand'
+export {
+  getUserServiceCommand,
+  SaveUserInStoreCommand
 }
-
-const getUserCommand = new GetUserServiceCommand( { userService } )
-const userData = await getUserCommand.execute()
-

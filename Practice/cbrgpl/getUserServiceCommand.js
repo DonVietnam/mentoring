@@ -1,19 +1,20 @@
 import ServiceCommand from './serviceCommand'
+import { userService } from '@services'
 
-export default class GetUserServiceCommand extends ServiceCommand {
+class GetUserServiceCommand extends ServiceCommand {
   async execute () {
     const userService = this.services.userService
     const requestArray = [
       () => userService.getUser(),
-      () => userService.getUserTickets()
     ]
 
     const requestResults = await this.makeRequests( requestArray )
-    console.log( requestResults )
 
     return {
-      getUserResponse: requestResults[ 0 ],
-      getUserTicketsResponse: requestResults[ 1 ]
+      getUserResponse: requestResults[ 0 ].value,
     }
   }
 }
+
+const getUserServiceCommand = new GetUserServiceCommand( { userService } )
+export default getUserServiceCommand

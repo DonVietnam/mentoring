@@ -1,14 +1,12 @@
-import { InternalClientLogicError, CommandExecutionError } from '@errors'
+import Command from './command'
+import { CommandExecutionError } from '@errors'
 
-export default class ServiceCommand {
+export default class ServiceCommand extends Command {
   constructor ( services ) {
+    super()
     this.services = services
 
     this.promisesQueue = []
-  }
-
-  async execute () {
-    throw new InternalClientLogicError( 'execute method is not implemented in ServiceCommand descendant' )
   }
 
   async makeRequests ( requestArray ) {
