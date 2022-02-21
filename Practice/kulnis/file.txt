@@ -1,0 +1,478 @@
+import { WarrantyStatusTypes } from './enums/warranty-status-types';
+import { Project } from './../projects/entities/project.entity';
+import { Warranty } from './entities/warranty.entity';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { CreateWarrantyDto } from './dto/create-warranty.dto';
+import { UpdateWarrantyDto } from './dto/update-warranty.dto';
+import { DeepPartial, In, Repository } from 'typeorm';
+import { ErrorTypes } from '../error/enums/errorTypes.enum';
+import { LogActionType } from './entities/log-action-types';
+import { User } from '../users/entities/user.entity';
+import { WarrantyLog } from './entities/warranty-log.entity';
+import { ProjectsService } from '../projects/projects.service';
+import { WarrantyLocationLinkDto } from './dto/create-warranty-location-link.dto';
+import { WarrantyLocationLink } from './entities/warranty-location-link.entity';
+import { Building } from '../buildings/entities/building.entity';
+import { BuildingLevel } from '../buildings/entities/building-level.entity';
+import { BuildingRoom } from '../buildings/entities/building-room.entity';
+
+@Injectable()
+export class WarrantyService {
+  constructor(
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+    @InjectRepository(Warranty)
+    private warrantyRepository: Repository<Warranty>,
+    @InjectRepository(WarrantyLocationLink)
+    private warrantyLocationLinkRepository: Repository<WarrantyLocationLink>,
+    @InjectRepository(Building)
+    private buildingsRepository: Repository<Building>,
+    @InjectRepository(BuildingLevel)
+    private buildingLevelsRepository: Repository<BuildingLevel>,
+    @InjectRepository(BuildingRoom)
+    private buildingRoomsRepository: Repository<BuildingRoom>,
+    @InjectRepository(Project)
+    private projectsRepository: Repository<Project>,
+    @InjectRepository(WarrantyLog)
+    private warrantyLogRepository: Repository<WarrantyLog>,
+    private projectsService: ProjectsService,
+  ) {}
+  async createWarranty(userId: number, createWarrantyDto: CreateWarrantyDto) {
+    await this.projectsService.checkUserAccess(
+      userId,
+      +createWarrantyDto.projectId,
+      true,
+    );
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    const project = await this.projectsRepository.findOne({
+      where: { id: createWarrantyDto.projectId },
+    });
+
+    const incomingWarrantyNote: DeepPartial<Warranty> = {
+      ...createWarrantyDto,
+      project,
+    };
+
+    const warranty = this.warrantyRepository.create(incomingWarrantyNote);
+    await this.warrantyRepository.save(warranty);
+
+    return this.warrantyLogger(user, warranty, '', LogActionType.create);
+  }
+
+  async createLocationLink(
+    userId: number,
+    warrantyLocationLinkDto: WarrantyLocationLinkDto,
+  ) {
+    const warranty = await this.warrantyRepository.findOne({
+      where: { id: warrantyLocationLinkDto.warrantyId },
+    });
+    if (!warranty)
+      throw new BadRequestException(ErrorTypes.WARRANTY_ITEM_NOT_FOUND);
+
+    const warrantyId = await this.warrantyLocationLinkRepository.find({
+      where: { warrantyId: warrantyLocationLinkDto.warrantyId },
+    });
+    if (warrantyId.length != 0)
+      throw new BadRequestException(
+        ErrorTypes.WARRANTY_ALREADY_HAS_LOCATION_LINK,
+      );
+
+    const building = await this.buildingsRepository.findOne({
+      where: { id: warrantyLocationLinkDto.buildingId },
+      relations: ['project'],
+    });
+    if (!building) throw new BadRequestException(ErrorTypes.BUILDING_NOT_FOUND);
+
+    let level = null;
+    if (warrantyLocationLinkDto.buildingLevelId) {
+      level = await this.buildingLevelsRepository.findOne({
+        where: { id: warrantyLocationLinkDto.buildingLevelId },
+        relations: ['buildings'],
+      });
+      if (!level)
+        throw new BadRequestException(ErrorTypes.BUILDING_LEVEL_NOT_FOUND);
+      let levelIsPartOfBuilding = false;
+      for (const buildingAux of level.buildings) {
+        if (buildingAux.id === building.id) {
+          levelIsPartOfBuilding = true;
+          break;
+        }
+      }
+      if (!levelIsPartOfBuilding)
+        throw new BadRequestException(
+          ErrorTypes.BUILDING_LEVEL_IS_NOT_PART_OF_BUILDING,
+        );
+    }
+
+    let rooms = null;
+    if (warrantyLocationLinkDto.buildingRoom) {
+      rooms = await this.buildingRoomsRepository.find({
+        where: { id: In(warrantyLocationLinkDto.buildingRoom) },
+        relations: ['level'],
+      });
+      if (
+        !rooms ||
+        rooms.length !== warrantyLocationLinkDto.buildingRoom.length
+      )
+        throw new BadRequestException(ErrorTypes.BUILDING_ROOM_NOT_FOUND);
+      for (const room of rooms) {
+        if (room.level.id != level.id)
+          throw new BadRequestException(
+            ErrorTypes.BUILDING_ROOM_IS_NOT_PART_OF_BUILDING,
+          );
+      }
+    }
+
+    const incomingLocationLink: DeepPartial<WarrantyLocationLink> = {
+      ...warrantyLocationLinkDto,
+    };
+
+    const locationLink =
+      this.warrantyLocationLinkRepository.create(incomingLocationLink);
+    await this.warrantyLocationLinkRepository.save(locationLink);
+
+    return locationLink;
+  }
+
+  async findAllWarrantyLocationLink() {
+    const data = await this.warrantyLocationLinkRepository.find({
+      order: { id: 'DESC' },
+    });
+    return data;
+  }
+
+  async findOneWarrantyLocationLink(warrantyLocationLinkId: number) {
+    const warrantyLocationLink =
+      await this.warrantyLocationLinkRepository.findOne({
+        where: { id: warrantyLocationLinkId },
+      });
+    if (!warrantyLocationLink)
+      throw new BadRequestException(
+        ErrorTypes.WARRANTY_LOCATION_LINK_NOT_FOUND,
+      );
+
+    const data = await this.warrantyLocationLinkRepository.find({
+      where: { id: warrantyLocationLinkId },
+      relations: ['warranty'],
+    });
+
+    return data;
+  }
+
+  async getAllLogs() {
+    const data = await this.warrantyLogRepository.find({
+      order: { id: 'DESC' },
+      relations: ['warranty'],
+    });
+
+    return data;
+  }
+
+  async findAllWarranty() {
+    const data = await this.warrantyRepository.find({
+      order: { id: 'DESC' },
+      relations: ['warrantyLocationLink'],
+    });
+
+    return data;
+  }
+
+  async findOneWarranty(id: number) {
+    const warranty = await this.warrantyRepository.findOne({
+      where: { id: id },
+      relations: ['warrantyLocationLink'],
+    });
+    if (!warranty)
+      throw new BadRequestException(ErrorTypes.WARRANTY_ITEM_NOT_FOUND);
+
+    return warranty;
+  }
+
+  async findAllWarrantyForProjectId(projectId: number, userId: number) {
+    await this.projectsService.checkUserAccess(userId, +projectId, false);
+
+    const whereObject = { where: {} };
+    whereObject['where']['project'] = { id: projectId };
+
+    const totalCount = await this.warrantyRepository.count({
+      ...whereObject,
+    });
+
+    const data = await this.warrantyRepository.find({
+      ...whereObject,
+      order: { id: 'DESC' },
+    });
+
+    return {
+      total: totalCount,
+      data,
+    };
+  }
+
+  async getWarrantyLog(warrantyId: number, userId: number) {
+    const warranty = await this.warrantyRepository.findOne({
+      where: { id: warrantyId },
+      withDeleted: true,
+    });
+    if (!warranty)
+      throw new BadRequestException(ErrorTypes.WARRANTY_ITEM_NOT_FOUND);
+
+    await this.projectsService.checkUserAccess(
+      userId,
+      +warranty.projectId,
+      false,
+    );
+
+    const data = await this.warrantyLogRepository.find({
+      relations: ['warranty'],
+      order: { id: 'DESC' },
+      withDeleted: true,
+    });
+
+    return data;
+  }
+
+  async update(
+    id: number,
+    userId: number,
+    updateWarrantyDto: UpdateWarrantyDto,
+  ) {
+    const warranty = await this.warrantyRepository.findOne({
+      where: { id },
+    });
+    if (!warranty)
+      throw new BadRequestException(ErrorTypes.WARRANTY_ITEM_NOT_FOUND);
+
+    await this.projectsService.checkUserAccess(
+      userId,
+      +warranty.projectId,
+      true,
+    );
+
+    const warrantyIncomingUpdate: DeepPartial<Warranty> = {
+      ...updateWarrantyDto,
+    };
+
+    if (typeof updateWarrantyDto.warrantyLocationLinkId != 'undefined') {
+      if (updateWarrantyDto.warrantyLocationLinkId == null) {
+        warrantyIncomingUpdate.warrantyLocationLink = null;
+      } else {
+        const warrantyLocationLink =
+          await this.warrantyLocationLinkRepository.findOne({
+            where: { id: updateWarrantyDto.warrantyLocationLinkId },
+          });
+        if (!warrantyLocationLink)
+          throw new BadRequestException(
+            ErrorTypes.WARRANTY_LOCATION_LINK_NOT_FOUND,
+          );
+
+        warrantyIncomingUpdate.warrantyLocationLink = warrantyLocationLink;
+      }
+    }
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    const statusesRouting: Map<string, Array<string>> = new Map([
+      ['opened', ['opened', 'submitted']],
+      ['submitted', ['submitted', 'inProgress']],
+      ['inProgress', ['inProgress', 'underObservation', 'onHold', 'closed']],
+      ['underObservation', ['inProgress', 'underObservation', 'closed']],
+      ['onHold', ['inProgress', 'onHold', 'closed']],
+      ['closed', ['closed']],
+    ]);
+
+    if (
+      !statusesRouting
+        .get(warranty.status)
+        .includes(warrantyIncomingUpdate.status)
+    ) {
+      throw new BadRequestException(
+        ErrorTypes.WARRANTY_STATUS_CHANGE_ROUTING_ERROR,
+      );
+    }
+
+    if (
+      warrantyIncomingUpdate.status == WarrantyStatusTypes.submitted &&
+      warrantyIncomingUpdate.dueDate == null &&
+      warranty.dueDate == null
+    ) {
+      throw new BadRequestException(
+        ErrorTypes.UNABLE_TO_SUBMIT_WARRANTY_DUEDATE,
+      );
+    }
+
+    const warrantyDueDate = new Date(this.validFormat(warranty.dueDate));
+    const warrantyIncomingUpdateDueDate = new Date(
+      this.validFormat(warrantyIncomingUpdate.dueDate),
+    );
+
+    if (warranty.status != WarrantyStatusTypes.opened) {
+      if (warranty.status == warrantyIncomingUpdate.status) {
+        if (
+          warrantyIncomingUpdate.dueDate != null &&
+          +warrantyDueDate !== +warrantyIncomingUpdateDueDate
+        )
+          throw new BadRequestException(
+            ErrorTypes.WARRANTY_DUEDATE_CANT_CHANGE,
+          );
+      } else {
+        if (
+          warrantyIncomingUpdate.dueDate != null &&
+          +warrantyDueDate !== +warrantyIncomingUpdateDueDate
+        )
+          throw new BadRequestException(
+            ErrorTypes.WARRANTY_DUEDATE_CANT_CHANGE,
+          );
+      }
+    }
+
+    if (
+      warrantyIncomingUpdate.status == WarrantyStatusTypes.inProgress &&
+      warranty.status == WarrantyStatusTypes.submitted
+    ) {
+      if (
+        +warrantyDueDate !== +warrantyIncomingUpdateDueDate &&
+        new Date() > warranty.dueDate
+      )
+        warrantyIncomingUpdate.overdue = true;
+    }
+
+    warrantyIncomingUpdate['id'] = id;
+    const warrantyIncomingUpdatePreload = await this.warrantyRepository.preload(
+      warrantyIncomingUpdate,
+    );
+
+    const updateWarranty = await this.warrantyRepository.save(
+      warrantyIncomingUpdatePreload,
+    );
+
+    return this.warrantyLogger(
+      user,
+      warranty,
+      updateWarranty,
+      LogActionType.update,
+    );
+  }
+
+  validFormat(dateString) {
+    return new Date(Date.parse(dateString));
+  }
+
+  async removeWarranty(id: number, userId: number) {
+    const warranty = await this.warrantyRepository.findOne({
+      where: { id },
+    });
+    if (!warranty)
+      throw new BadRequestException(ErrorTypes.WARRANTY_ITEM_NOT_FOUND);
+
+    await this.projectsService.checkUserAccess(
+      userId,
+      +warranty.projectId,
+      true,
+    );
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    try {
+      await this.warrantyRepository.softRemove(warranty);
+    } catch (e) {
+      throw new BadRequestException(ErrorTypes.WARRANTY_ITEM_DELETE_ERROR);
+    }
+
+    return this.warrantyLogger(user, warranty, '', LogActionType.delete);
+  }
+
+  async removeWarrantyLocationLink(id: number) {
+    const warrantyLocationLink =
+      await this.warrantyLocationLinkRepository.findOne({
+        where: { id },
+      });
+
+    if (!warrantyLocationLink)
+      throw new BadRequestException(
+        ErrorTypes.WARRANTY_LOCATION_LINK_NOT_FOUND,
+      );
+
+    try {
+      await this.warrantyLocationLinkRepository.delete(warrantyLocationLink);
+    } catch (e) {
+      throw new BadRequestException(
+        ErrorTypes.WARRANTY_LOCATION_LINK_DELETE_ERROR,
+      );
+    }
+
+    return `warrantyLocationLink with ${warrantyLocationLink.id} was deleted`;
+  }
+
+  async warrantyLogger(
+    user: User,
+    warranty: any,
+    warrantyIncomingUpdate: any,
+    action: LogActionType,
+  ) {
+    let reason = `${user.lastName + ' ' + user.firstName}`;
+
+    switch (action) {
+      case LogActionType.create: {
+        reason += ': created this warranty.';
+        break;
+      }
+      case LogActionType.update: {
+        reason += ': updated ';
+        const result = this.getChangedFields(warranty, warrantyIncomingUpdate);
+        reason += result.length === 0 ? '' : result.join(',');
+        if (warranty.status !== warrantyIncomingUpdate.status) {
+          reason +=
+            result.length === 0
+              ? ` changed status from ${warranty.status} to ${warrantyIncomingUpdate.status}.`
+              : ` and changed status from ${warranty.status} to ${warrantyIncomingUpdate.status}.`;
+        }
+        break;
+      }
+      case LogActionType.delete: {
+        reason += ': deleted this warranty.';
+        break;
+      }
+    }
+
+    const warrantyLogData: WarrantyLog = this.warrantyLogRepository.create({
+      user: user,
+      warranty: warranty.id,
+      project: warranty.projectId,
+      reason: reason,
+      action: action,
+    });
+    this.warrantyLogRepository.save(warrantyLogData);
+
+    return warrantyLogData;
+  }
+
+  getChangedFields(warranty: any, warrantyIncomingUpdate: any) {
+    const result = [];
+    for (const key in warranty) {
+      if (
+        warranty[key] != warrantyIncomingUpdate[key] &&
+        +this.validFormat(warranty[key]) !=
+          +this.validFormat(warrantyIncomingUpdate[key])
+      ) {
+        result.push(key);
+      } else if (
+        warranty[key] != warrantyIncomingUpdate[key] &&
+        key != 'status'
+      ) {
+        result.push(key);
+      }
+    }
+
+    return result;
+  }
+}
