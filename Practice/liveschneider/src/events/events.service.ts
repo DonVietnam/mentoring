@@ -4,6 +4,7 @@ import { calendar_v3, google } from 'googleapis';
 import { CalendarEvent } from './entities/calendar-event.entity';
 import { CalendarEventAttendee } from './entities/calendar-event-attendee.entity';
 import { GravatarService } from '../gravatar/gravatar.service';
+import { CalendarsService } from '../calendars/calendars.service';
 
 @Injectable()
 export class EventsService {
@@ -12,19 +13,27 @@ export class EventsService {
   constructor(
     private readonly authService: AuthService,
     private readonly gravatarService: GravatarService,
+    private readonly calendarsService: CalendarsService,
   ) {
     this.calendar = google.calendar({ version: 'v3' });
   }
 
-  async search(startDate: Date, endDate: Date) {
-    const auth = this.authService.getAuth();
-    const response = await this.calendar.events.list({
-      auth: auth,
-      calendarId: process.env.CALENDAR_ID,
-      timeMin: startDate.toISOString(),
-      timeMax: endDate.toISOString(),
-    });
-    return this.parseEvents(response.data.items);
+  async getEvents(teamId: string, startDate: Date, endDate: Date) {
+    const sharedCalendars = this.calendarsService.getSharedCalendars(teamId);
+    const result: CalendarEvent[] = [];
+
+    for (const calendar of sharedCalendars) {
+      const auth = this.authService.getGoogleAuthToken();
+      const response = await this.calendar.events.list({
+        auth: auth,
+        calendarId: calendar,
+        timeMin: startDate.toISOString(),
+        timeMax: endDate.toISOString(),
+      });
+      const events = await this.parseEvents(response.data.items);
+      result.push(...events);
+    }
+    return result;
   }
 
   private async parseEvents(events: calendar_v3.Schema$Event[]) {
@@ -35,6 +44,7 @@ export class EventsService {
         summary: event.summary,
         description: event.description,
         location: event.location,
+        hangoutLink: event.hangoutLink,
         created: new Date(event.created),
         updated: new Date(event.updated),
         startDate: new Date(event.start.date || event.start.dateTime),
@@ -46,18 +56,17 @@ export class EventsService {
   }
 
   private async parseAttendees(attendees: calendar_v3.Schema$EventAttendee[]) {
-    if (!attendees) return undefined;
-    const result: CalendarEventAttendee[] = [];
-    for (const attendee of attendees) {
-      const gravatarProfile = await this.gravatarService.getProfile(
-        attendee.email,
-      );
-      result.push({
-        email: attendee.email,
-        photo: this.gravatarService.getProfilePhoto(attendee.email),
-        ...gravatarProfile,
-      });
+    if (attendees) {
+      const result: CalendarEventAttendee[] = [];
+
+      for (const attendee of attendees) {
+        const profile = await this.gravatarService.getProfile(attendee.email);
+
+        if (!profile) continue;
+
+        result.push({ email: attendee.email, ...profile });
+      }
+      return result;
     }
-    return result;
   }
 }

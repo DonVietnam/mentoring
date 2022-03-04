@@ -1,0 +1,15 @@
+batch-1: &batch1 bbp2fbora4vteeuiqp45l26qog@group.calendar.google.com
+
+team-1:
+  id: 1
+  common:
+    - *batch1
+  personal:
+    - kup8op97jncic71nt8t4t38p90@group.calendar.google.com
+
+team-2:
+  id: 2
+  common:
+    - *batch1
+  personal:
+    - 8q9n46iqrd6eflvjcrc8i85va8@group.calendar.google.com

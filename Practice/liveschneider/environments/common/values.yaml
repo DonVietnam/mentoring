@@ -1,0 +1,38 @@
+appName: 'accelerator-api'
+appImageName: 'gcr.io/xsolla-accelerator/ci/accelerator-api'
+
+services:
+  TCP:
+    port: '8080'
+    targetPort: '3000'
+    ingress: {}
+
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: '172.16.0.0/20, 172.16.16.0/20, 192.168.0.0/23, 192.168.2.0/24, 192.168.4.0/24, 192.168.20.0/24, 10.0.0.0/8, 185.30.20.0/22, 192.168.40.0/26, 192.168.40.64/27'
+
+helmfileConfigMaps:
+  app:
+    name: 'accelerator-api-config'
+    data: 'configs.yaml'
+
+containers:
+  app:
+    ports:
+      - containerPort: '{{ .Values.services.TCP.targetPort }}'
+    readinessProbe:
+      httpGet:
+        path: '/health/ping'
+        port: '{{ .Values.services.TCP.targetPort }}'
+    livenessProbe:
+      httpGet:
+        path: '/health/ping'
+        port: '{{ .Values.services.TCP.targetPort }}'
+    envFrom:
+      configMapRef:
+        name: '{{ .Values.helmfileConfigMaps.app.name }}'
+    resources:
+      cpu:
+        requests: '0.1'
+      memory:
+        requests: '128M'

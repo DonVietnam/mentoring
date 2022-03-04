@@ -1,0 +1,18 @@
+# environments/stage/values/current.yaml
+# Autoscaling configuration
+horizontalPodAutoscaler:
+  # Min PODs to run
+  minReplicas: 2
+  # Max PODs to scale
+  maxReplicas: 6
+  metrics:
+    resource:
+      # % of resource utilization
+      cpu: 60
+      memory: 90
+
+containers:
+  app:
+    env:
+      - name: 'RELEASE'
+        value: 'CURRENT'

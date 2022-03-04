@@ -1,18 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { google } from 'googleapis';
-import { JWT } from 'google-auth-library';
+import { FilesService } from '../files/files.service';
+import { ConfigService } from '@nestjs/config';
+import { Version2Client } from 'jira.js';
 
 @Injectable()
 export class AuthService {
-  private CREDENTIALS = JSON.parse(process.env.CREDENTIALS);
+  constructor(
+    private readonly filesService: FilesService,
+    private readonly configService: ConfigService,
+  ) {}
+
   private SCOPES = ['https://www.googleapis.com/auth/calendar'];
 
-  getAuth(): JWT {
-    return new google.auth.JWT(
-      this.CREDENTIALS.client_email,
-      null,
-      this.CREDENTIALS.private_key,
-      this.SCOPES,
-    );
+  getGoogleAuthToken() {
+    const clientEmail = this.configService.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+
+    const privateKey = JSON.parse(
+      `{"key": "${this.configService.get('GOOGLE_SERVICE_ACCOUNT_KEY')}"}`,
+    ).key;
+
+    return new google.auth.JWT(clientEmail, null, privateKey, this.SCOPES);
+  }
+
+  getAtlassianClient() {
+    const atlassianEmail = this.configService.get('ATLASSIAN_EMAIL');
+    const atlassianApiToken = this.configService.get('ATLASSIAN_API_TOKEN');
+
+    return new Version2Client({
+      host: 'https://xsolla.atlassian.net',
+      authentication: {
+        basic: {
+          email: atlassianEmail,
+          apiToken: atlassianApiToken,
+        },
+      },
+    });
   }
 }

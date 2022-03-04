@@ -1,0 +1,16 @@
+# environments in your project
+environments:
+  dev:
+  stage:
+  prod:
+
+# Helmfiles, in this setup we're using helmfile, maintained by DevOps team.
+# They are located here: https://gitlab.loc/sysadm-k8s/helmfile-templates/-/tree/master
+# In more complex setups, here could be presented your own helmfiles, for example for the dev environment with
+# database and redis another infrastructure, which is needed for your app.
+# So you could deploy the whole infrastructure in the dev env.
+helmfiles:
+  - path: git::ssh://git@gitlab.loc/sysadm-k8s/helmfile-templates.git@helmfile.yaml?ref=master
+    selectors:
+      # We're using specific template by this selector
+      - template=default-application
