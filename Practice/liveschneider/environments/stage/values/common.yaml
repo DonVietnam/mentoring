@@ -1,5 +1,0 @@
-containers:
-  app:
-    env:
-      - name: 'ENV'
-        value: 'STAGE'

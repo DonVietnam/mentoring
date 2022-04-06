@@ -1,8 +1,0 @@
-baseDomain: "k8s.local"
-
-containers:
-  app:
-    imagePullPolicy: "Never"
-    env:
-      - name: 'ENV'
-        value: 'DEV'

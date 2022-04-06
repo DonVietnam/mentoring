@@ -1,7 +1,0 @@
-baseDomain: "gcp-k8s-accelerator-prod.srv.local"
-
-containers:
-  app:
-    env:
-      - name: 'ENV'
-        value: 'PRODUCTION'
